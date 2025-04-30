@@ -31,7 +31,7 @@ mod values;
 
 pub use entry::{CreatedEntry, Entry, EntryBuilder, ExistingEntry};
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq, Clone)]
 struct Node<K, T> {
     children: Vec<(K, Node<K, T>)>,
     leaves: Vec<T>,
@@ -110,7 +110,7 @@ where
 ///
 /// Subsets and Supersets are lazily evaluated. Note that superset queries are far more expensive
 /// than subset queries, so attempt to structure your problem around subsets.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SetTrie<K, T>(Node<K, T>);
 
 impl<K, T> SetTrie<K, T> {
@@ -258,5 +258,52 @@ mod tests {
         for i in 1..seed {
             current = current.entry(i - 1..i).or_insert(i)
         }
+    }
+
+    #[test]
+    fn clone_empty_trie() {
+        let t1: SetTrie<&str, &str> = SetTrie::new();
+        let t2 = t1.clone();
+        // both should be empty
+        assert_eq!(t1.values().count(), 0);
+        assert_eq!(t2.values().count(), 0);
+    }
+
+    #[test]
+    fn clone_multi_level_trie() {
+        let mut t1 = SetTrie::new();
+        t1.insert(&[1, 2], "a");
+        t1.insert(&[1, 3], "b");
+        t1.insert(&[2, 3, 4], "c");
+
+        let t2 = t1.clone();
+        // same contents
+        let mut vals1: Vec<_> = t1.values().collect();
+        let mut vals2: Vec<_> = t2.values().collect();
+        vals1.sort();
+        vals2.sort();
+        assert_eq!(vals1, vals2);
+    }
+
+    #[test]
+    fn deep_clone_and_mutate_disjoint() {
+        let mut a = SetTrie::new();
+        a.insert(&["x", "y"], 10);
+        a.insert(&["x", "z"], 20);
+
+        let mut b = a.clone();
+        // mutate b
+        b.insert(&["x", "y"], 30);
+        b.insert(&["w"], 40);
+
+        // a should remain with only the original two entries
+        let mut a_vals: Vec<_> = a.values().collect();
+        a_vals.sort();
+        assert_eq!(a_vals, vec![&10, &20]);
+
+        // b should see all four values
+        let mut b_vals: Vec<_> = b.values().collect();
+        b_vals.sort();
+        assert_eq!(b_vals, vec![&10, &20, &30, &40]);
     }
 }
